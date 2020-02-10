@@ -19,11 +19,14 @@ simple_thread_pool::simple_thread_pool(std::size_t sz)
                             return;  // Conditions to let the thread go.
                         task = std::move(ptr->queue.front());
                         ptr->queue.pop();
+                        ptr->n_working.fetch_add(1, std::memory_order_release);
                     }
                     // >>> Critical region => End
-                    ptr->n_working.fetch_add(1, std::memory_order_release);
                     task();
-                    ptr->n_working.fetch_add(-1, std::memory_order_acquire);
+                    {
+                        std::unique_lock<std::mutex> lock(ptr->queue_mu);
+                        ptr->n_working.fetch_add(-1, std::memory_order_acquire);
+                    }
                     ptr->wait_cv.notify_one();
                 }
             },
